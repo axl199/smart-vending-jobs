@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Vending Jobs — Field Technician Jobs in Unattended Retail</title>
+<meta name="description" content="Job board for smart vending, micro-market, and unattended retail field technicians.">
+<style>
+  :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #111827; }
+  body { margin: 0; background: #f8fafc; }
+  header { background: #0f172a; color: #fff; padding: 28px 20px; }
+  header h1 { margin: 0 0 6px; font-size: 30px; }
+  header p { margin: 0; color: #cbd5e1; max-width: 720px; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+  input, select, textarea { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+  input[type="search"] { flex: 2; min-width: 220px; }
+  button, .btn { background: #0f766e; color: #fff; border: 0; border-radius: 8px; padding: 11px 16px; font-size: 15px; cursor: pointer; text-decoration: none; display: inline-block; }
+  button.secondary { background: #e2e8f0; color: #111827; }
+  .notice { background: #fef9c3; border: 1px solid #fde68a; padding: 12px 14px; border-radius: 8px; margin: 12px 0; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 12px 0; cursor: pointer; }
+  .card.featured { border-color: #0f766e; box-shadow: 0 0 0 1px #0f766e inset; }
+  .badge { display: inline-block; background: #0f766e; color: #fff; font-size: 12px; padding: 3px 8px; border-radius: 999px; margin-right: 8px; }
+  .badge.seeded { background: #e2e8f0; color: #334155; }
+  .meta { color: #475569; margin: 6px 0; }
+  .detail, .post { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 16px 0; }
+  .post label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  .post input, .post textarea, .post select { width: 100%; box-sizing: border-box; }
+  .tiers { display: flex; gap: 12px; flex-wrap: wrap; }
+  .tier { border: 2px solid #e2e8f0; border-radius: 12px; padding: 14px; flex: 1; min-width: 220px; cursor: pointer; }
+  .tier.selected { border-color: #0f766e; }
+  footer { max-width: 980px; margin: 0 auto; padding: 0 20px 32px; color: #64748b; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Smart Vending Jobs</h1>
+  <p>Field technician, service technician, and micro-market installer jobs in smart vending and unattended retail. Job seekers search free. Employers pay to post.</p>
+</header>
+<main>
+  <div id="banner" class="notice" hidden></div>
+
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search title, company, or location…" aria-label="Search jobs">
+    <select id="state" aria-label="Filter by state"><option value="">All states</option></select>
+    <select id="company" aria-label="Filter by company"><option value="">All companies</option></select>
+    <button id="postBtn" type="button">Post a Job — $99 / $199</button>
+  </div>
+  <p id="count"></p>
+  <div id="list"></div>
+
+  <section id="detail" class="detail" hidden></section>
+
+  <section id="post" class="post" hidden>
+    <h2>Post a Job</h2>
+    <p>Standard: $99 for a 30-day listing. Featured: $199 for a 30-day listing pinned to the top of search results.</p>
+    <div class="tiers">
+      <div class="tier selected" data-tier="standard"><strong>Standard — $99</strong><br>30-day listing</div>
+      <div class="tier" data-tier="featured"><strong>Featured — $199</strong><br>30-day listing, pinned to the top</div>
+    </div>
+    <label for="fCompany">Company *</label><input id="fCompany" required>
+    <label for="fTitle">Job title *</label><input id="fTitle" required>
+    <label for="fLocation">Location *</label><input id="fLocation" placeholder="City, ST" required>
+    <label for="fPay">Pay (optional)</label><input id="fPay" placeholder="$20–$25/hr">
+    <label for="fUrl">Application link *</label><input id="fUrl" placeholder="https://…" required>
+    <label for="fDesc">Description</label><textarea id="fDesc" rows="5"></textarea>
+    <p><button id="submitPost" type="button">Continue to Stripe Checkout</button>
+       <button id="cancelPost" type="button" class="secondary">Cancel</button></p>
+    <p id="postMsg"></p>
+    <p><small>With Stripe configured, you are redirected to Stripe to pay and the job goes live only after payment is confirmed. Without Stripe keys, this deployment runs in demo mode: the post publishes immediately and no card is charged.</small></p>
+  </section>
+</main>
+<footer>
+  <p>Seeded listings come from employer postings supplied in October 2026. Always check the employer's application page for the current, full description before applying — a posting may have closed since it was seeded.</p>
+</footer>
+<script>
+let jobs = [], tier = 'standard';
+const $ = (id) => document.getElementById(id);
+const el = (tag, text) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; return n; };
+
+async function loadConfig() {
+  const r = await fetch('/api/config'); const c = await r.json();
+  if (c.demo_mode) { $('banner').hidden = false; $('banner').textContent = 'Demo mode: Stripe is not configured on this deployment, so test posts publish immediately and no card is charged. Set STRIPE_SECRET_KEY (and STRIPE_WEBHOOK_SECRET) to enable live payments.'; }
+  return c;
+}
+async function loadJobs() {
+  const params = new URLSearchParams({ q: $('q').value, state: $('state').value, company: $('company').value });
+  const r = await fetch('/api/jobs?' + params); const data = await r.json();
+  jobs = data.jobs;
+  fillSelect($('state'), data.states, $('state').value);
+  fillSelect($('company'), data.companies, $('company').value);
+  $('count').textContent = jobs.length + ' job' + (jobs.length === 1 ? '' : 's');
+  const list = $('list'); list.innerHTML = '';
+  if (!jobs.length) { list.appendChild(el('p', 'No jobs match that search. Try a broader keyword or clear a filter.')); return; }
+  jobs.forEach(job => {
+    const card = el('div'); card.className = 'card' + (job.featured ? ' featured' : '');
+    if (job.featured) card.appendChild(el('span', '★ Featured')); 
+    const h = el('h3', job.title); card.appendChild(h);
+    const m = el('p', job.company + ' — ' + job.location + (job.pay ? ' — ' + job.pay : '')); m.className = 'meta'; card.appendChild(m);
+    card.addEventListener('click', () => showDetail(job.id));
+    list.appendChild(card);
+  });
+}
+function fillSelect(select, values, current) {
+  const first = select.options[0]; select.innerHTML = ''; select.appendChild(first);
+  values.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; if (v === current) o.selected = true; select.appendChild(o); });
+}
+async function showDetail(id) {
+  const r = await fetch('/api/jobs/' + id); if (!r.ok) return; const job = await r.json();
+  const d = $('detail'); d.hidden = false; d.innerHTML = '';
+  if (job.featured) d.appendChild(el('span', '★ Featured'));
+  d.appendChild(el('h2', job.title));
+  const m = el('p', job.company + ' — ' + job.location + (job.pay ? ' — ' + job.pay : '')); m.className = 'meta'; d.appendChild(m);
+  d.appendChild(el('p', job.description));
+  const a = el('a', 'Apply on the employer site →'); a.href = job.apply_url; a.target = '_blank'; a.rel = 'noopener'; a.className = 'btn'; d.appendChild(a);
+  d.scrollIntoView({ behavior: 'smooth' });
+}
+document.querySelectorAll('.tier').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tier').forEach(x => x.classList.remove('selected'));
+  t.classList.add('selected'); tier = t.dataset.tier;
+}));
+$('postBtn').addEventListener('click', () => { $('post').hidden = false; $('post').scrollIntoView({ behavior: 'smooth' }); });
+$('cancelPost').addEventListener('click', () => { $('post').hidden = true; });
+$('q').addEventListener('input', loadJobs);
+$('state').addEventListener('change', loadJobs);
+$('company').addEventListener('change', loadJobs);
+$('submitPost').addEventListener('click', async () => {
+  const body = { company: $('fCompany').value, title: $('fTitle').value, location: $('fLocation').value, pay: $('fPay').value, apply_url: $('fUrl').value, description: $('fDesc').value, tier };
+  const r = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) { $('postMsg').textContent = data.error || 'Could not submit that post.'; return; }
+  if (data.checkout_url) { window.location.href = data.checkout_url; return; }
+  $('postMsg').textContent = 'Demo mode: your post is now live (no charge was made).';
+  $('post').hidden = true; await loadJobs();
+});
+(async () => {
+  await loadConfig();
+  const params = new URLSearchParams(location.search);
+  if (params.get('checkout') === 'success' && params.get('session_id')) {
+    const r = await fetch('/api/checkout/success?session_id=' + encodeURIComponent(params.get('session_id')));
+    const data = await r.json();
+    $('banner').hidden = false;
+    $('banner').textContent = data.published ? 'Payment confirmed — your job is now live.' : 'Payment could not be confirmed yet. If you paid, the Stripe webhook will publish your job shortly.';
+  }
+  await loadJobs();
+})();
+</script>
+</body>
+</html>
