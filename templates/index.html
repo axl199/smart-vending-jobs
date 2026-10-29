@@ -100,6 +100,7 @@
 </main>
 <footer>
   <p>Seeded listings come from employer postings supplied in October 2026. Always check the employer's application page for the current, full description before applying — a posting may have closed since it was seeded.</p>
+  <p>Contact: <a href="mailto:smartvendingjobs@gmail.com">smartvendingjobs@gmail.com</a> — employers can ask for a listing to be corrected or removed at any time.</p>
 </footer>
 <script>
 let jobs = [], tier = 'standard';
@@ -144,6 +145,8 @@ async function showDetail(id) {
   const m = el('p', job.company + ' — ' + job.location + (job.pay ? ' — ' + job.pay : '')); m.className = 'meta'; d.appendChild(m);
   d.appendChild(el('p', job.description));
   const a = el('a', 'Apply on the employer site →'); a.href = job.apply_url; a.target = '_blank'; a.rel = 'noopener'; a.className = 'btn'; d.appendChild(a);
+  const share = el('p', 'Direct link to this listing: '); share.className = 'meta';
+  const shareLink = el('a', location.origin + '/?job=' + job.id); shareLink.href = '/?job=' + job.id; share.appendChild(shareLink); d.appendChild(share);
   d.scrollIntoView({ behavior: 'smooth' });
 }
 document.querySelectorAll('.tier').forEach(t => t.addEventListener('click', () => {
@@ -174,6 +177,8 @@ $('submitPost').addEventListener('click', async () => {
     $('banner').textContent = data.published ? 'Payment confirmed — your job is now live.' : 'Payment could not be confirmed yet. If you paid, the Stripe webhook will publish your job shortly.';
   }
   await loadJobs();
+  const jobId = params.get('job');
+  if (jobId) await showDetail(parseInt(jobId, 10));
 })();
 </script>
 </body>
